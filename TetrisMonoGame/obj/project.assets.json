@@ -301,11 +301,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\tomy1\\OneDrive - Cégep de Shawinigan\\Session - 3 - info\\Prog. Objet\\JEUX\\TetrisMonoGame\\TetrisMonoGame.csproj",
+      "projectUniqueName": "C:\\Users\\tomy1\\OneDrive - Cégep de Shawinigan\\Session - 3 - info\\Prog. Objet\\Jeux_MonoGame\\TetrisMonoGame\\TetrisMonoGame.csproj",
       "projectName": "TetrisMonoGame",
-      "projectPath": "C:\\Users\\tomy1\\OneDrive - Cégep de Shawinigan\\Session - 3 - info\\Prog. Objet\\JEUX\\TetrisMonoGame\\TetrisMonoGame.csproj",
+      "projectPath": "C:\\Users\\tomy1\\OneDrive - Cégep de Shawinigan\\Session - 3 - info\\Prog. Objet\\Jeux_MonoGame\\TetrisMonoGame\\TetrisMonoGame.csproj",
       "packagesPath": "C:\\Users\\tomy1\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\tomy1\\OneDrive - Cégep de Shawinigan\\Session - 3 - info\\Prog. Objet\\JEUX\\TetrisMonoGame\\obj\\",
+      "outputPath": "C:\\Users\\tomy1\\OneDrive - Cégep de Shawinigan\\Session - 3 - info\\Prog. Objet\\Jeux_MonoGame\\TetrisMonoGame\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
