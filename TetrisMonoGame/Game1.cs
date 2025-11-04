@@ -1,6 +1,10 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace TetrisMonoGame;
 
@@ -19,15 +23,26 @@ public class Game1 : Game
     const int CELL = 30;
 
     const int GRAVITY_SPEED = 800;
-    int timer = 0;
+    const double LOCK_DELAY_MS = 500;
 
+    double _gravityMs = GRAVITY_SPEED;
+    double _fallAccum = 0;
+    double _lockAccum = 0;
+    double _dasAccum = 0;
+    double _arrAccum = 0;
+    int _moveDir = 0;
+
+    
     SpriteFont _font;
 
     public static Color[] PieceColors { get; } = {
         Color.Cyan, Color.Yellow, Color.Purple, Color.Green, Color.Red, Color.Blue, Color.Orange
     };
+    public Queue<PieceType> Bag { get; } = new();
+    public Random Rng { get; } = new();
 
     GameState _state = GameState.Running;
+    KeyboardState _ks, _ksPrev;
     int[,] _grid = new int[ROWS, COLS];
 
     Texture2D _pixel;
@@ -62,9 +77,9 @@ public class Game1 : Game
 
         _font = Content.Load<SpriteFont>("Default");
 
-        _current = MakeTetris(PieceType.J);
-        _current.X = COLS / 2 - 2;
-        _current.Y = -2;
+        ResetGrid();
+        RefillBag();
+        Spawn();
     }
 
     protected override void Update(GameTime gameTime)
@@ -72,13 +87,24 @@ public class Game1 : Game
         if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
             Exit();
 
-        timer++;
+        double dt = gameTime.ElapsedGameTime.TotalMilliseconds;
 
-        if (timer % 60 == 0) _current.Y += 1;
-        if(Collides(_current))
+        ReadInput();
+
+        if (IsPressed(Keys.Up) || IsPressed(Keys.X)) TryRotate(+1);
+        if (_ks.IsKeyDown(Keys.Down)) SoftDrop();
+        if (_ks.IsKeyDown(Keys.Left)) MoveHorizontal(-1);
+        if (_ks.IsKeyDown(Keys.Right)) MoveHorizontal(1);
+
+        _fallAccum += dt;
+        while (_fallAccum >= _gravityMs)
         {
-            LockPiece();
+            _fallAccum -= _gravityMs;
+            StepDown();
         }
+
+
+
 
         base.Update(gameTime);
     }
@@ -106,8 +132,32 @@ public class Game1 : Game
         return false;
     }
 
+    void StepDown()
+    {
+        var test = _current.Clone();
+        test.Y += 1;
+
+        if (!Collides(test))
+        {
+            _current = test;
+            _lockAccum = 0;
+        }
+        else
+        {
+            _lockAccum += _gravityMs;
+            if (_lockAccum >= LOCK_DELAY_MS)
+            {
+                LockPiece();
+                Spawn();
+            }
+        }
+    }
+
+
     void LockPiece()
     {
+        bool topOut = false;
+
         foreach (var (rx, ry) in _current.IterCells())
         {
             int gx = _current.X + rx;
@@ -115,6 +165,91 @@ public class Game1 : Game
 
             if (gy >= 0 && gy < ROWS && gx >= 0 && gx < COLS)
                 _grid[gy, gx] = (int)_current.Type + 1;
+        }
+
+        if (topOut) _state = GameState.GameOver;
+    }
+
+    void ResetGrid()
+    {
+        for (int r = 0; r < ROWS; r++)
+            for (int c = 0; c < COLS; c++)
+                _grid[r, c] = 0;
+    }
+
+    void RefillBag()
+    {
+        var types = new List<PieceType>((PieceType[])Enum.GetValues(typeof(PieceType)));
+        types.Remove(PieceType.None);
+        for (int i = types.Count - 1; i > 0; i--)
+        {
+            int j = Rng.Next(i + 1);
+            (types[i], types[j]) = (types[j], types[i]);
+        }
+        foreach (var t in types) Bag.Enqueue(t);
+    }
+
+    
+
+    void Spawn()
+    {
+        if (Bag.Count < 7) RefillBag();
+        _current = MakeTetris(Bag.Dequeue());
+        _current.X = COLS / 2 - 2;
+        _current.Y = -2; // 
+
+        _fallAccum = 0;
+        _lockAccum = 0;
+
+        if (Collides(_current))
+            _state = GameState.GameOver;
+
+    }
+
+    void ReadInput()
+    {
+        _ksPrev = _ks;
+        _ks = Keyboard.GetState();
+        if (IsPressed(Keys.Escape)) Exit();
+    }
+
+    bool IsPressed(Keys k) => _ks.IsKeyDown(k) && !_ksPrev.IsKeyDown(k);
+
+    void TryRotate(int dir)
+    {
+        Tetris test = _current.Clone();
+        test.Rotate(dir);
+
+        if (!Collides(test))
+        {
+            _current = test;
+            _lockAccum = 0;
+        }
+    }
+
+    void MoveHorizontal(int dir)
+    {
+        var test = _current.Clone();
+        test.X += dir;
+        if (!Collides(test))
+        {
+            _current = test;
+            _lockAccum = 0;
+        }
+    }
+
+    void SoftDrop()
+    {
+        Tetris test = _current.Clone();
+        test.Y += 1;
+        if (!Collides(test))
+        {
+            _current = test;
+            _lockAccum = 0;
+        }
+        else
+        {
+            _lockAccum += 16;
         }
     }
 
@@ -128,8 +263,10 @@ public class Game1 : Game
         Point origin = new Point(BORDER, BORDER);
         DrawBoard(origin);
         DrawGrid(origin);
-        if(_current != null)
-            DrawPiece(origin, _current, PieceColors[(int)_current.Type]);
+        if(_current != null) DrawPiece(origin, _current, PieceColors[(int)_current.Type]);
+
+        int sideX = BORDER + COLS * CELL + 20;
+        DrawNextQueue(new Point(sideX, BORDER));
 
         _spriteBatch.End();
         base.Draw(gameTime);
@@ -208,6 +345,41 @@ public class Game1 : Game
         _spriteBatch.Draw(_pixel, left, Color.White * 0.15f);
     }
 
+    void DrawMini(Point p, PieceType type, Color color)
+    {
+        Tetris t = MakeTetris(type);
+        int baseX = p.X + 8;
+        int baseY = p.Y + 8;
+        int mini = CELL / 2;
+        foreach (var (rx, ry) in t.IterCells())
+        {
+            Rectangle r = new Rectangle(baseX + rx * mini, baseY + ry * mini, mini, mini);
+            DrawCell(r, color);
+        }
+    }
+
+    void DrawLabel(Point p, string text)
+    {
+        if (_font == null) return;
+        _spriteBatch.DrawString(_font, text, new Vector2(p.X, p.Y), Color.Yellow);
+    }
+
+    void DrawNextQueue(Point topLeft)
+    {
+        DrawLabel(topLeft, "NEXT");
+
+        int nextPiecePosition = topLeft.Y + 24;
+        
+        if (Bag.Count > 0)
+        {
+            // Prend la première pièce du sac (sans la retirer)
+            PieceType next = Bag.Peek();
+
+            DrawMini(new Point(topLeft.X, nextPiecePosition), next, PieceColors[(int)next]);
+        }
+    }
+
+
     Tetris MakeTetris(PieceType type)
     {
         switch(type)
@@ -279,12 +451,4 @@ public class Game1 : Game
                 return null;
         }
     }
-
-
-    //void Spawn()
-    //{
-        
-    //}
-
-
 }
